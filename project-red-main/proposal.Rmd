@@ -1,0 +1,32 @@
+---
+title: "Project Proposal: Measles Vaccination Rate Across US Schools"
+author: "RED: Ryan Mitchell, Elayna Lei, Dana Otera, Debosir Ghosh"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+### Section 1. Introduction
+
+For our final project, we plan to investigate measles vaccination rates across the US, which were compiled from the Wall Street Journal. We chose this data set because we are interested in how relevant it is to the anti-vaccination movement as well as the anticipation for the discovery of the COVID-19 vaccine. Our research question is: “To what extent has the anti-vaccination movement impacted schools’ vaccination rates across the country?” We hypothesize that various demographics like general political affiliations of states, regional location, types of school, and more will affect the vaccination rates in schools. 
+
+Disclaimer: We plan to conduct further research about state political affiliations and add this variable to the data set. 
+
+### Section 2. Data description
+
+Our data set contains immunization rate data for schools across the US. In the data set, there are 16 variables and 66,113 observations. For the variables, the data set displays characteristics of schools (index ID, state, year, name, school type, city, county, district, enrollment, MMR vaccination rate, school’s overall vaccination rate, percentage of students exempted from vaccination for religious reasons, percentage of students exempted from vaccination for medical reasons, percentage of students exempted from vaccination for personal reasons, school latitude, and school longitude). Each observation in the data set is a school in the US. The Wall Street Journal retrieved the vaccination data from state health departments. About 16,000 schools’ addresses in eight states were already in the original data set. To get the remaining school locations, the WSJ checked the National Center for Education Statistics’ school directories or the states’ school directory. Further, if a school could not be found, the location was determined by Google Maps API. 
+
+### Section 3. Glimpse of data 
+
+```{r load-data, message = FALSE}
+measles <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-02-25/measles.csv')
+```
+
+```{r load-packages, message = FALSE}
+library(tidyverse)
+```
+
+```{r glimpse}
+glimpse(measles)
+```
+
+

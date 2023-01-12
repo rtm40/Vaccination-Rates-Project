@@ -1,0 +1,414 @@
+---
+title: "How Has the Anti-Vaccination Movement Impacted the Measles, Mumps, and Rubella (MMR) Vaccination Rates in Schools Across the US?"
+author: "RED: Ryan Mitchell, Elayna Lei, Dana Otera, Debosir Ghosh"
+date: "November 15, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE, 
+                      message = FALSE)
+```
+
+```{r load-packages}
+library(tidyverse)
+library(infer)
+library(broom)
+```
+
+```{r load-data}
+measles <- read_csv("data/measles.csv")
+```
+
+# Introduction and Data 
+
+For our final project, we investigated measles vaccination rates across the US, which were compiled from the Wall Street Journal.$^1$ Our research question is: “What factors associated with the anti-vaccination movement have impacted the Measles, Mumps, and Rubella (MMR) vaccination rates across the US?” We are looking at factors such as political affiliations of states, regional location, types of school, and whether or not the state has both personal and religious exemptions. 
+
+Our data set contains MMR immunization rate data for schools across the US. In the data set, there are 16 variables and 66,113 observations.$^2$ For the variables, the data set displays characteristics of schools (index ID, state, year, name, school type, city, county, district, enrollment, MMR vaccination rate, school’s overall vaccination rate, percentage of students exempted from vaccination for religious reasons, percentage of students exempted from vaccination for medical reasons, percentage of students exempted from vaccination for personal reasons, school latitude, and school longitude). Each observation in the data set is a school in the US. The Wall Street Journal retrieved the vaccination data from state health departments. About 16,000 schools’ addresses in eight states were already in the original data set. To get the remaining school locations, the WSJ checked the National Center for Education Statistics’ school directories or the states’ school directory. Further, if a school could not be found, the location was determined by Google Maps API. 
+
+# Methodology
+
+We examined the following variables in our research:
+
+`mmr`: Schools' Measles, Mumps, and Rubella vaccination rate. Note: Some of the `mmr` values are -1, signifying a lack of a valid data point. Thus, we filtered these out of our analyses so that our data would not be skewed. 
+
+`region`: US region that each school's state belongs to, as defined by the US Embassy and Consulate in the Republic of Korea$^3$.**
+
+`type`: Whether a school is public, private, or charter.
+
+`party`: Political party affiliation of each school's state, as defined by how the state voted in the majority of the past 5 elections (not including the 2020 election).$^4$**
+
+`exemptions`: Whether or not each school's state offers both religious and personal exemptions, as given by the Pew Research Center as of June 28, 2019.$^5$**
+
+**Not in the original Wall Street Journal data set.
+
+We first were interested in determining how regionality in the United States impacted MMR vaccination rates. We used regional definitions from the US Embassy and Consulate in the Republic of Korea to categorize states into the West, South, Northeast, and Midwest. We then visualized the distribution of MMR vaccination rates, faceting by region to compare.
+
+We then focused on how type of school impacted MMR vaccination rates. While the type of school variable included six school classifications, we decided to only focus on "Public" and "Private". To examine the differences between the two, we compared the proportion of schools in each of these types that had a 100% MMR vaccination rate. We created a side-by-side bar graph to visualize the differences.
+
+Political party affiliation is known to have a large impact on anti-vaccination ideals. It has been statistically proven that those with anti-vaxx views are more likely to be conservative.$^6$ Therefore, we wanted to see how Republican or Democratic party affiliation impacted schools' MMR vaccination rates. To do this, we looked at data on how each state voted in the past five presidential elections, and categorized the political party value as either Republican or Democrat depending on how the state voted in a majority of these past five presidential elections, not including the 2020 presidential election. We then conducted a simulation-based hypothesis test for difference in means at the 5% significance level to see if there was significant evidence that schools in Republican states have a lower mean MMR vaccination rate than schools in Democrat states.
+
+Next, we looked at states that offer both religious and personal exemptions for vaccines to see how the growing anti-vaccination movement was impacting schools. We used data from the Pew Research Center to categorize states into either having both religious and personal exemptions (these observations have a value of "Yes" for the exemptions variable) or not (a value of "No" for the exemptions variable). We then conducted a simulation-based hypothesis test for difference in means at the 5% significance level to see if there was significant evidence that schools in states with religious and personal exemptions have a lower mean MMR vaccination rate than schools in states without both religious and personal exemptions.
+
+Finally, we were interested in seeing how well the variables we looked at could predict MMR vaccination rates in schools across the US. To do this, we constructed four linear regression models, using MMR vaccination rate as the response and US region, type of school, political party, and religious/personal exemptions as the explanatory variables for each respective model. We then calculated the $R^2$ value of each model to compare the percent of variability in MMR vaccination rate that could be explained by each variable. We also looked at a fifth model, which combined the two best predictors; we calculated the $R^2$ value for this model as well. At the end, we calculated the Adjusted $R^2$ values to see which model was the best fit for our data. 
+
+# Results 
+
+## Exploratory Data Analysis 
+
+Our analysis focuses on the `mmr` variable, which details the MMR vaccination rate across schools in the United States. MMR vaccination rates are distributed throughout US schools as seen below:
+
+```{r mmr-distribution, fig.height=2.7, fig.width=6}
+measles <- measles %>%
+  filter(mmr != -1)
+ggplot(data = measles, aes(x = mmr)) +
+  geom_histogram() +
+  labs(title = "MMR Vaccination Rates Across US Schools",
+       x = "MMR Vaccination Rate",
+       y = "Count") +
+  theme_bw()
+```
+
+```{r summary-stats}
+measles_stats <- measles %>%
+  summarise(mean = mean(mmr), median = median(mmr), sd = sd(mmr))
+knitr::kable(measles_stats)
+```
+
+The mean MMR vaccination rate in our sample was $\bar{x} = 95.072$, with a median of $M = 97.9$ and standard deviation $s = 8.065$. The distribution is clearly skewed left with most schools having a high vaccination rate; however, we were interested in how certain factors impacted the differences in MMR vaccination rate across the country.
+
+### Region:   
+
+```{r mutate-region}
+measles <- measles %>%
+  mutate(region = case_when(
+    state == "Arizona" | state == "California" | state == "Colorado" |
+      state == "Idaho" | state == "Oregon" | state == "Montana"| 
+      state == "Washington" | state == "Utah" ~ "West",
+    state == "Arkansas"| state == "Florida"| state == "North Carolina"| 
+      state == "Oklahoma"| state == "Texas"| state == "Tennessee"| 
+      state == "Virginia" ~ "South",
+    state == "Connecticut"| state == "Maine"| state == "Massachusetts"| 
+      state == "New Jersey"| state == "New York"| state == "Pennsylvania"| 
+      state == "Rhode Island"| state == "Vermont" ~ "Northeast",
+    state == "Illinois"| state == "Iowa"| state == "Michigan"| 
+      state == "Minnesota"| state == "Missouri"| state == "North Dakota"| 
+      state == "Ohio"| state == "South Dakota"| state == "Wisconsin" ~ "Midwest"
+  ))
+```
+
+We used a histogram faceted by geographical region to see the difference in MMR vaccination rate of schools among regions of the US. 
+
+```{r visualization-region, fig.height=5.5, fig.width=6}
+ggplot(data = measles, aes(x = mmr, fill = region)) +
+  geom_histogram() +
+  facet_wrap(~ region, scales = "free_y") + 
+  labs(title = "Distribution of MMR Vaccination Rates in Schools",
+       subtitle = "Faceted by Region",
+       x = "MMR Vaccination Rate",
+       y = "Count",
+       fill = "Region") +
+  theme_bw()
+```
+
+Based on the graph showing MMR vaccination rates by region, we observe that each of the distributions for the West, South, Northeast, and Midwest were unimodal and left-skewed suggesting that the vast majority of schools regardless of region had a vaccination rate of 100%. However, we also noticed that the South had the smallest count of schools that had a vaccination rate of 100%. We also noticed that the West had the largest count of schools that had a vaccination rate of 100%. 
+
+### Type of School
+
+```{r measles-school}
+measles_school <- measles %>%
+  filter(type == "Public" | type == "Private") %>%
+  mutate(hundred_rate = if_else(mmr == 100, "100% Vax Rate", "Not 100% Vax Rate"))
+```
+
+We used a bar graph faceted by type of school to compare the proportion of schools with 100% MMR vaccination rate.
+
+```{r visualization-school, fig.width=9}
+ggplot(data = measles_school, aes(x = hundred_rate, fill = type)) +
+  geom_bar() +
+  facet_wrap(~ type, scales = "free_y") + 
+  labs(title = "Comparison of MMR Vaccination Rates in Schools",
+       subtitle = "Faceted by Type of School",
+       x = "MMR Vaccination Rate",
+       y = "Count",
+       fill = "Type of School") +
+  theme_bw()
+```
+
+Based on the graph showing MMR vaccination rate by school type, we observe that there's a higher proportion of private schools that have a 100% vaccination rate compared to that of public schools. 
+
+## Hypothesis Testing 
+
+### Political Party
+
+```{r party-mutation}
+measles <- measles %>%
+  mutate(party = if_else(
+    state == "Alabama" | state == "Alaska" | state == "Arizona" |
+      state == "Arkansas" | state == "Florida" | state == "Georgia" |
+      state == "Idaho" | state == "Indiana" | state == "Kansas" |
+      state == "Kentucky" | state == "Louisiana" | state == "Mississippi" |
+      state == "Missouri" | state == "Montana" | state == "Nebraska" |
+      state == "North Carolina" | state == "North Dakota" | state == "Ohio" |
+      state == "Oklahoma" | state == "South Carolina" | state == "South Dakota" |
+      state == "Tennessee" | state == "Texas" | state == "Utah" |
+      state == "West Virginia" | state == "Wyoming", "Republican", "Democrat"))
+```
+
+We conducted a simulation-based hypothesis test for the difference in means at the $\alpha = 0.05$ level to test $H_0:\mu_R = \mu_D$ vs. $H_a:\mu_R < \mu_D$. Our observed difference in means was as follows:
+
+```{r obs-diff-political}
+diff_mean_pol <- measles %>%
+  specify(mmr ~ party) %>%
+  calculate(stat = "diff in means", order = c("Republican", "Democrat")) %>%
+  pull()
+knitr::kable(diff_mean_pol)
+```
+
+\newpage 
+
+We visualized our null distribution below. 
+
+```{r null-dist-political}
+set.seed(1234)
+null_dist_pol <- measles %>% 
+  specify(mmr ~ party) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps  = 1000, type = "permute") %>% 
+  calculate(stat = "diff in means", order = c("Republican", "Democrat"))
+```
+
+```{r visualization-political}
+ggplot(data = null_dist_pol, aes(x = stat)) +
+  geom_histogram() + 
+  geom_vline(xintercept = diff_mean_pol, lty = 2, size = 1, color = "red") +
+  labs(title = "Null Distribution of Difference in Mean MMR Vax Rates between 
+       Schools in Republican and Democrat States", 
+       subtitle = "With Observed Difference in Means", 
+       x = "Difference in MMR Vax Rate Means", 
+       y = "Count")
+```
+
+Our p-value is as follows:
+
+```{r p-val-political}
+null_dist_pol_p <- null_dist_pol %>%
+  filter(stat < diff_mean_pol) %>%
+  summarise(p_val = n()/nrow(null_dist_pol))
+knitr::kable(null_dist_pol_p)
+```
+
+Our observed difference in MMR vaccination rate means between schools in Republicans and Democratic states is -3.92. Our p-value of 0 is less than $\alpha = 0.05$, so we reject the null hypothesis. There is sufficient evidence to suggest that the mean MMR vaccination rate among schools in Republican states is lower than the mean MMR vaccination rate among schools in Democratic states.
+
+### Religious and Personal Exemptions
+
+```{r mutate-exemp}
+measles <- measles %>%
+  mutate(exemptions = if_else(
+    state == "Arizona" |state == "Utah" | state == "Idaho" | state == "Oregon" |
+      state == "Washington" | state == "Colorado" | state == "Texas" | 
+      state == "Oklahoma" | state == "North Dakota" | state == "Arkansas" | 
+      state == "Wisconsin" | state == "Michigan" | state == "Ohio" | 
+      state == "Pennsylvania", "Yes", "No"
+  ))
+```
+
+We conducted a simulation-based hypothesis test for the difference in means at the $\alpha = 0.05$ level to test $H_0:\mu_E = \mu_N$ vs. $H_a:\mu_E < \mu_N$. Our observed difference in means was as follows: 
+
+```{r obs-diff-exemp}
+diff_mean_ex <- measles %>%
+  specify(mmr ~ exemptions) %>%
+  calculate(stat = "diff in means", order = c("Yes", "No")) %>%
+  pull()
+knitr::kable(diff_mean_ex)
+```
+
+\newpage
+
+We visualized our null distribution below. 
+
+```{r null-dist-exemp}
+set.seed(5678)
+null_dist_ex <- measles %>% 
+  specify(mmr ~ exemptions) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps  = 1000, type = "permute") %>% 
+  calculate(stat = "diff in means", order = c("Yes", "No"))
+```
+
+```{r visualization-exemp}
+ggplot(data = null_dist_ex, aes(x = stat)) +
+  geom_histogram() + 
+  geom_vline(xintercept = diff_mean_ex, lty = 2, size = 1, color = "red") +
+  labs(title = "Null Distribution of Difference in Mean MMR Vax Rates Between 
+       Schools in States with Both Religious and Personal Exemptions 
+       and States Without Both", 
+       subtitle = "With Observed Difference in Means", 
+       x = "Difference in MMR Vax Rate Means", 
+       y = "Count")
+```
+
+Our p-value is as follows:
+
+```{r p-val-exemp}
+null_dist_ex_p <- null_dist_ex %>%
+  filter(stat < diff_mean_ex) %>%
+  summarise(p_val = n()/nrow(null_dist_ex))
+knitr::kable(null_dist_ex_p)
+```
+
+Our observed difference in MMR vaccination rate means between schools in states that give both religious and personal exemptions and those that don't is -3.75. Our p-value of 0 is less than $\alpha = 0.05$, so we reject the null hypothesis. There is sufficient evidence to suggest that the mean MMR vaccination rate among schools in states with both religious and personal exemptions is lower than the mean MMR vaccination rate among schools in states without both religious and personal exemptions.
+
+## Linear Regression
+
+### Political Party
+
+```{r pred-mmr-party}
+m_main_p <- lm(mmr ~ party, data = measles)
+m_main_p %>%
+  tidy() %>%
+  select(term, estimate) %>%
+  knitr::kable()
+```
+
+Based on our first linear model which predicted MMR vaccination rate by political party, we get an equation of Predicted MMR vax rate = $-3.92 \times partyRepublican + 95.78$. The $R^2$ value of this model was:
+
+```{r r-squared-party}
+glance(m_main_p)$r.squared  %>%
+  knitr::kable()
+```
+
+This means that about 3.52% of the variability in MMR vaccination rate is explained by political party of the state each school resides in.
+
+### Region
+
+```{r pred-mmr-region}
+m_main_r <- lm(mmr ~ region, data = measles)
+m_main_r %>%
+  tidy() %>%
+  select(term, estimate) %>%
+  knitr::kable()
+```
+
+Based on our second linear model which predicted MMR vaccination rate by region,  we get an equation of Predicted MMR vax rate = $1.25 \times regionNortheast - 6.92 \times regionSouth + 0.21 \times regionWest + 94.95$. The $R^2$ value of this model was:
+
+```{r r-squared-region}
+glance(m_main_r)$r.squared %>%
+  knitr::kable()
+```
+
+This means that about 2.76% of the variability in MMR vaccination rate is explained by geographic region of the state each school resides in.
+
+### Type of School
+
+```{r pred-mmr-school}
+m_main_s <- lm(mmr ~ type, data = measles_school)
+m_main_s %>%
+  tidy() %>%
+  select(term, estimate) %>%
+  knitr::kable()
+```
+
+Based on our third linear model which predicted MMR vaccination rate by type of school,  we get an equation of Predicted MMR vax rate = $2.84 \times typePublic + 93.32$. The $R^2$ value of this model was:
+
+```{r r-squared-school}
+glance(m_main_s)$r.squared %>%
+  knitr::kable()
+```
+
+This means that about 2.08% of the variability in MMR vaccination rate is explained by whether a school is public or private.
+
+### Personal and Religious Exemptions
+
+```{r pred-mmr-exemp}
+m_main_e <- lm(mmr ~ exemptions, data = measles)
+m_main_e %>%
+  tidy() %>%
+  select(term, estimate) %>%
+  knitr::kable()
+```
+
+Based on our fourth linear model which predicted MMR vaccination rate by exemption policy,  we get an equation of Predicted MMR vax rate = $-3.75 \times exemptionsYes + 96.15$. The $R^2$ value of this model was:
+
+```{r r-squared-exemptions}
+glance(m_main_e)$r.squared %>%
+  knitr::kable()
+```
+
+This means that about 4.42% of the variability in MMR vaccination rate is explained by whether the state a school resides in offers both religious and personal vaccination exemptions or not.
+
+### Combined Model
+
+```{r pred-mmr-exemp-party}
+m_main_ep <- lm(mmr ~ exemptions + party, data = measles)
+m_main_ep %>%
+  tidy() %>%
+  select(term, estimate) %>%
+  knitr::kable()
+```
+
+We chose to combine the first and fourth linear models which predicted MMR vaccination rate by political party and exemptions respectively into a new model because these models had the highest value of $R^2$. This new model is characterized by the following equation of Predicted MMR vax rate = $-2.2 \times partyRepublican - 2.74 \times exemptionsYes + 96.26$. The $R^2$ value of this model was:
+
+```{r combo-r}
+glance(m_main_ep)$r.squared %>%
+  knitr::kable()
+```
+
+This means that about 5.21% of the variability in MMR vaccination rate is explained by both political party of the state each school resides in and whether the state a school resides in offers both religious and personal vaccination exemptions or not. We wanted to see which model was the best fit for our data, so we compared the Adjusted $R^2$ values for our exemptions model and our combined model. 
+
+The Adjusted $R^2$ for the exemptions model was:
+
+```{r adjusted-r2-exemptions}
+glance(m_main_e)$adj.r.squared %>%
+  knitr::kable()
+```
+
+The Adjusted $R^2$ for the combined model was:
+
+```{r adjusted-r2-combined}
+glance(m_main_ep)$adj.r.squared %>%
+  knitr::kable()
+```
+
+The addition of the political party variable to the religious and personal exemptions model resulted in a higher Adjusted $R^2$, so our combined model is the better fit for our data.
+
+\newpage
+
+# Conclusion
+
+After completing our statistical analyses to answer our research question: "What factors associated with the anti-vaccination movement have impacted the Measles, Mumps, and Rubella (MMR) vaccination rates across the US?", we found that political party and whether or not a state had religious and personal exemptions are the factors that have a suggestive impact on MMR vaccination rates. 
+
+The distribution of MMR vaccination rates does not differ too much according to regional location of the school, but we thought that it was interesting that the quantity of schools in the South that did report their MMR rates was significantly lower than that of other regions. 
+
+We had expected that private schools would have a lower proportion of schools with a 100% vaccination rate, but based off of our findings, we found that there is a higher proportion of private schools with a 100% vaccination rate. Since students attending private schools come from families with higher incomes$^7$, we can infer that wealth is not necessarily indicative of anti-vaccination sentiment.
+
+We hypothesized that the MMR vaccination rates in schools in Republican states would be lower than the MMR vaccination rates in schools in Democratic states; we found evidence to support our claim from our simulation-based hypothesis test for difference in means. 
+
+We hypothesized that the MMR vaccination rates in schools in states with both religious and personal exemptions would be lower than the MMR vaccination rates in schools in states without both exemptions; we found evidence to support our claim from our simulation-based hypothesis test for difference in means. 
+
+Based on our linear models, we found that political party and exemptions were the stronger predictors of MMR vaccination rate. 
+
+We also had some limitations to our data and analysis. We only had data from 32 states, so although we had a large number of schools sampled, they are not representative of the entire country. There is also a disproportionately large number of public schools compared to that of private schools sampled. Thus, the conclusions we draw from the private schools are less reliable due to the smaller sample size. For our linear regression models, all of the R$^2$ values were close to 0. None of the variables we examined are strong predictors of MMR vaccination rates, so this could undermine the validity of the conclusions we made. 
+
+To improve upon the prediction of MMR vaccination rates, we could use a model that is different from a linear regression model, as the data could follow other non-linear trends. Additionally, we could have taken samples within our data to account for the disproportionate amount of data across different geographic regions, such as the South having fewer valid data points. 
+
+If we were to repeat this study, we could have been more comprehensive with hypothesis testing for the variables we performed exploratory data analysis on. On the other hand, we could have done more exploratory data analysis for the variables we performed hypothesis tests on. Going forward in this study, we could examine more factors that contribute to the anti-vaccination movement. We could also examine vaccination rate trends over time to see how the recent rise in the anti-vaccination movement has impacted schools' vaccination rates.  
+
+\newpage
+
+# References
+
+$^1$ Moriarty, Dylan, Taylor Umlauf, and Brianna Abbott. “What's the Measles Vaccination Rate at Your Child's School?” The Wall Street Journal. Dow Jones &amp; Company, October 3, 2019. https://www.wsj.com/graphics/school-measles-rate-map/.
+
+$^2$ “Measles.” GitHub, February 24, 2020. https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-02-25/readme.md.
+
+$^3$ “The Regions of the United States.” U.S. Embassy &amp; Consulate in the Republic of Korea, July 13, 2020. http://web.archive.org/web/20200811142315/https://kr.usembassy.gov/education-culture/infopedia-usa/travel-usa/regions-united-states/.
+
+$^4$ “List of United States Presidential Election Results by State.” Wikipedia. Wikimedia Foundation, November 7, 2020. https://en.wikipedia.org/wiki/List_of_United_States_presidential_election_results_by_state.
+
+$^5$ Sandstrom, Aleksandra. “Amid Measles Outbreak, New York Closes Religious Exemption for Vaccinations – but Most States Retain It.” Pew Research Center. Pew Research Center, August 27, 2020. https://www.pewresearch.org/fact-tank/2019/06/28/nearly-all-states-allow-religious-exemptions-for-vaccinations/.
+
+$^6$ Hornsey, Matthew J., Emily A. Harris, and Kelly S. Fielding. “The Psychological Roots of Anti-Vaccination Attitudes: A 24-Nation Investigation.” *Health Psychology* 37, no. 4 (2018): 307–15. https://doi.org/10.1037/hea0000586.
+
+$^7$ “PUBLIC AND PRIVATE SCHOOLS: HOW DO THEY DIFFER?” National Center for Education Statistics, July 1997. https://nces.ed.gov/pubs97/97983.pdf 

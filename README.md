@@ -1,6 +1,6 @@
 # project
 
-[Project](https://sta199-fa20-002.netlify.app/project/) for STA 199 - Fall 2020
+[Project](https://sta199-fa20-002.netlify.app/project/) for STA 199 - Fall 2020 at Duke University
 
 
 Our title is "How Has the Anti-Vaccination Movement Impacted the Measles, Mumps, and Rubella (MMR) Vaccination Rates in Schools Across the US?". 
